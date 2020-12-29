@@ -6,7 +6,7 @@
     pname = "monitroid";
     version = "0.0.0";
 
-    subPackages = [ "cmd/monitroid" ];
+    subPackages = [ "cmd/monitroid" "cmd/monitroidctl" ];
 
     src = ./.;
 
@@ -15,4 +15,7 @@
 
   # Nixos.
   nixos = import ./nixos;
+
+  # Path.
+  path = ./.;
 }

@@ -35,7 +35,7 @@ func main() {
 	}()
 
 	if err := run(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("gatherers finished with error: %s", err)
+		log.Fatalf("daemon finished with error: %s", err)
 	}
 }
 
@@ -58,7 +58,7 @@ func run(ctx context.Context) (err error) {
 
 	// Create a TCP server.
 	if err := os.Remove(SocketFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove unix socket: %w", err)
+		return fmt.Errorf("failed to remove the unix socket: %w", err)
 	}
 
 	l, err := net.Listen("unix", SocketFile)
@@ -70,6 +70,10 @@ func run(ctx context.Context) (err error) {
 			err = fmt.Errorf("failed to close TCP server: %w", err)
 		}
 	}()
+
+	if err := os.Chmod(SocketFile, 0666); err != nil {
+		return fmt.Errorf("failed to change the mode of the unix socket: %w", err)
+	}
 
 	go func() {
 		for {
