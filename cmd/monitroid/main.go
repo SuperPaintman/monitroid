@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
@@ -23,14 +22,6 @@ const (
 )
 
 func main() {
-	if err := run(context.Background()); err != nil {
-		log.Fatalf("gatherers finished with error: %s", err)
-	}
-}
-
-func run(ctx context.Context) (err error) {
-	var wg sync.WaitGroup
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Handle signals.
@@ -43,19 +34,20 @@ func run(ctx context.Context) (err error) {
 		cancel()
 	}()
 
+	if err := run(ctx); err != nil && err != context.Canceled {
+		log.Fatalf("gatherers finished with error: %s", err)
+	}
+}
+
+func run(ctx context.Context) (err error) {
 	// Acquire the pid file.
 	if err := acquirePidFile(); err != nil {
 		return err
 	}
-	wg.Add(1)
-	go func() {
-		<-ctx.Done()
-
+	defer func() {
 		if e := os.Remove(PIDFile); e != nil && err == nil {
 			err = fmt.Errorf("failed to remove PID file: %w", e)
 		}
-
-		wg.Done()
 	}()
 
 	// Create a supervisor.
@@ -73,16 +65,10 @@ func run(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to create TCP server: %w", err)
 	}
-
-	wg.Add(1)
-	go func() {
-		<-ctx.Done()
-
+	defer func() {
 		if e := l.Close(); e != nil && err == nil {
 			err = fmt.Errorf("failed to close TCP server: %w", err)
 		}
-
-		wg.Done()
 	}()
 
 	go func() {
@@ -103,9 +89,8 @@ func run(ctx context.Context) (err error) {
 		}
 	}()
 
-	wg.Wait()
-
-	return nil
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func handle(conn net.Conn, spv *supervisor.Supervisor) {
