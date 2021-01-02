@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/SuperPaintman/monitroid/gatherers"
 )
+
+var ErrNotReady = errors.New("supervisor: gatherer not ready")
 
 type Result struct {
 	Generation uint32      `json:"generation"`
@@ -30,7 +33,9 @@ func (s *Supervisor) Register(name string, d time.Duration, gatherer gatherers.G
 		panic(fmt.Errorf("supervisor: gatherer with name '%s' already registered", name))
 	}
 
-	s.gatherers[name] = Result{}
+	s.gatherers[name] = Result{
+		Error: ErrNotReady,
+	}
 
 	go func() {
 		timer := time.NewTimer(0)

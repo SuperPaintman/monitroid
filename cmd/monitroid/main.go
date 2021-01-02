@@ -54,6 +54,7 @@ func run(ctx context.Context) (err error) {
 	spv := &supervisor.Supervisor{}
 	spv.Register("cpu", 1*time.Second, &gatherers.CPU{})
 	spv.Register("ram", 2*time.Second, &gatherers.RAM{})
+	spv.Register("disk", 10*time.Second, &gatherers.Disk{})
 	defer spv.Stop()
 
 	// Create a TCP server.
