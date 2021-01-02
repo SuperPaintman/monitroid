@@ -13,10 +13,24 @@ import (
 
 var ErrNotReady = errors.New("supervisor: gatherer not ready")
 
+type JSONError struct {
+	Err error
+}
+
+func (e JSONError) MarshalJSON() ([]byte, error) {
+	if e.Err == nil {
+		return []byte("null"), nil
+	}
+
+	s := e.Err.Error()
+
+	return json.Marshal(s)
+}
+
 type Result struct {
 	Generation uint32      `json:"generation"`
 	Success    interface{} `json:"success"`
-	Error      error       `json:"error"`
+	Error      JSONError   `json:"error"`
 }
 
 type Supervisor struct {
@@ -34,7 +48,9 @@ func (s *Supervisor) Register(name string, d time.Duration, gatherer gatherers.G
 	}
 
 	s.gatherers[name] = Result{
-		Error: ErrNotReady,
+		Error: JSONError{
+			Err: ErrNotReady,
+		},
 	}
 
 	go func() {
@@ -55,7 +71,9 @@ func (s *Supervisor) Register(name string, d time.Duration, gatherer gatherers.G
 			if err != nil {
 				s.gatherers[name] = Result{
 					Generation: gen + 1,
-					Error:      err,
+					Error: JSONError{
+						Err: err,
+					},
 				}
 			} else {
 				s.gatherers[name] = Result{
