@@ -28,6 +28,8 @@ in
   };
 
   config = mkIf cfg.enable {
+    services.dbus.packages = [ cfg.package ];
+
     systemd.services.monitroid = {
       description = "Monitroid daemon";
       wantedBy = [ "multi-user.target" ];

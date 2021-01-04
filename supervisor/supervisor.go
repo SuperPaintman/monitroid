@@ -33,11 +33,30 @@ type Result struct {
 	Error      JSONError   `json:"error"`
 }
 
+func (r Result) Err() error {
+	return r.Error.Err
+}
+
+type Observer interface {
+	Observe(name string, gatherer gatherers.Gatherer, result Result)
+}
+
+var _ Observer = (ObserverFunc)(nil)
+
+type ObserverFunc func(name string, gatherer gatherers.Gatherer, result Result)
+
+func (fn ObserverFunc) Observe(name string, gatherer gatherers.Gatherer, result Result) {
+	fn(name, gatherer, result)
+}
+
 type Supervisor struct {
 	done chan struct{}
 
-	mu        sync.RWMutex
-	gatherers map[string]Result
+	muObservers sync.RWMutex
+	observers   []Observer
+
+	muGatherers sync.RWMutex
+	gatherers   map[string]Result
 }
 
 func (s *Supervisor) Register(name string, d time.Duration, gatherer gatherers.Gatherer) {
@@ -65,32 +84,52 @@ func (s *Supervisor) Register(name string, d time.Duration, gatherer gatherers.G
 
 			res, err := gatherer.Gather()
 
-			s.mu.Lock()
+			s.muGatherers.RLock()
 			gen := s.gatherers[name].Generation
+			s.muGatherers.RUnlock()
 
+			// TODO(SuperPaintman): check if result has changed.
+
+			var result Result
 			if err != nil {
-				s.gatherers[name] = Result{
+				result = Result{
 					Generation: gen + 1,
 					Error: JSONError{
 						Err: err,
 					},
 				}
 			} else {
-				s.gatherers[name] = Result{
+				result = Result{
 					Generation: gen + 1,
 					Success:    res,
 				}
 			}
-			s.mu.Unlock()
+
+			s.muGatherers.Lock()
+			s.gatherers[name] = result
+			s.muGatherers.Unlock()
+
+			s.muObservers.RLock()
+			for _, o := range s.observers {
+				o.Observe(name, gatherer, result)
+			}
+			s.muObservers.RUnlock()
 
 			timer.Reset(d)
 		}
 	}()
 }
 
+func (s *Supervisor) Observe(o Observer) {
+	s.muObservers.Lock()
+	defer s.muObservers.Unlock()
+
+	s.observers = append(s.observers, o)
+}
+
 func (s *Supervisor) DumpJSON(w io.Writer) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.muGatherers.RLock()
+	defer s.muGatherers.RUnlock()
 
 	result := struct {
 		Gatherers map[string]Result `json:"gatherers"`
